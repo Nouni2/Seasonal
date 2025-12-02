@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+SeasonalVenv/
+venv/
+.env/
+.venv/
+
+# Local data & databases (not tracked)
+data/
+
+# Distribution / build artifacts
+build/
+dist/
+*.egg-info/
+
+# Test / coverage outputs
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / editor config
+.vscode/
+.idea/
