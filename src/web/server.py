@@ -216,16 +216,25 @@ async def get_day_events(req: EphemerisReq):
     res = solver.solve_for_date(d, req.lat, req.lon, req.elevation)
     
     def fmt(t_obj):
+        """Formats a Time object (JD) to HH:MM:SS UTC (Civil)."""
         if not t_obj: return None
-        # Convert fractional day to HH:MM:SS string
-        frac = t_obj.jd_fraction
-        if frac < 0: frac += 1.0
-        if frac >= 1.0: frac -= 1.0
         
-        total_sec = frac * 86400
+        # 1. Get Julian Fraction (0.0 = Noon, 0.5 = Midnight)
+        jd_frac = t_obj.jd_fraction
+        
+        # 2. Convert to Civil Fraction (0.0 = Midnight, 0.5 = Noon)
+        # We shift by +0.5 days
+        civil_frac = jd_frac + 0.5
+        
+        # Normalize to [0, 1)
+        civil_frac = civil_frac - math.floor(civil_frac)
+        
+        # 3. Convert to HMS
+        total_sec = civil_frac * 86400.0
         h = int(total_sec // 3600)
         m = int((total_sec % 3600) // 60)
         s = int(total_sec % 60)
+        
         return f"{h:02d}:{m:02d}:{s:02d}"
 
     return EventResponse(

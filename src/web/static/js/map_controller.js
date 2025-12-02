@@ -5,7 +5,7 @@
 
 window.MapController = {
     map: null,
-    terminatorLayer: null,
+    terminatorLayer: null, // Now a LayerGroup instead of a Polygon
     markerLayer: null,
     
     // State
@@ -16,15 +16,15 @@ window.MapController = {
         console.log("MapController: Starting...");
         
         // 1. Initialize Leaflet
-        // We use a dark theme tile layer for scientific contrast
+        // CartoDB Dark Matter tiles look best for this sci-fi aesthetic
         this.map = L.map('map', {
             zoomControl: false,
             attributionControl: false,
             minZoom: 2,
-            worldCopyJump: true
+            maxBounds: [[-90, -360], [90, 360]], // Allow panning across copies
+            worldCopyJump: false // We handle wrapping manually via ghost polygons
         }).setView([20, 0], 2);
 
-        // CartoDB Dark Matter Tiles
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             subdomains: 'abcd',
             maxZoom: 19
@@ -34,7 +34,7 @@ window.MapController = {
         this.map.on('click', (e) => this.handleMapClick(e));
 
         // 3. Initial Draw
-        this.updateTerminator(); // Fetch initial sun position
+        this.updateTerminator(); 
         
         // 4. Start Animation Loop (Update sun position every minute)
         setInterval(() => this.updateTerminator(), 60000);
@@ -64,34 +64,94 @@ window.MapController = {
 
     /**
      * Draws the Night Polygon based on the subsolar point.
-     * We calculate the circle 90 degrees away from the sun.
+     * Uses the Great Circle equation projected to Mercator.
+     * Draws 3 copies (Center, Left, Right) to support infinite panning.
      */
     drawTerminator: function(sunLat, sunLon) {
         if (this.terminatorLayer) {
             this.map.removeLayer(this.terminatorLayer);
         }
 
-        // Generate polygon coordinates (Math heavy, but standard for day/night)
-        const coordinates = this.computeTerminatorPath(sunLat, sunLon);
+        // 1. Compute the sine wave for the terminator line
+        // We generate the path for the MAIN world (-180 to 180)
+        const mainPath = this.computeTerminatorPath(sunLat, sunLon);
         
-        // Create a polygon that covers the whole world...
-        // ...with a "hole" where it is day? Or just polygon for night?
-        // Simpler: Compute the "Night" polygon.
+        // 2. Define the "Night" Polygon Closure
+        // If Sun is North (Summer), Night is South -> Close via Bottom
+        // If Sun is South (Winter), Night is North -> Close via Top
+        const closureLat = (sunLat >= 0) ? -90 : 90;
         
-        this.terminatorLayer = L.polygon(coordinates, {
-            color: 'transparent',
-            fillColor: '#000',
-            fillOpacity: 0.4, // Shadow intensity
-            interactive: false
-        }).addTo(this.map);
+        // Add "closing" points to wrap the polygon around the dark pole
+        // We clone the path to avoid reference issues when shifting later
+        const centerCoords = [...mainPath];
+        centerCoords.push([closureLat, 180]);
+        centerCoords.push([closureLat, -180]);
+
+        // 3. Create Ghost Polygons (Shift Longitude by +/- 360)
+        // This ensures the shadow exists when the user pans to the repeated world
+        const leftCoords = centerCoords.map(pt => [pt[0], pt[1] - 360]);
+        const rightCoords = centerCoords.map(pt => [pt[0], pt[1] + 360]);
+
+        // 4. Style Options
+        const polyStyle = {
+            color: 'transparent',    // No border line
+            fillColor: '#000',       // Pure Black
+            fillOpacity: 0.65,       // Stronger shadow for contrast
+            interactive: false,
+            smoothFactor: 1.0
+        };
+
+        // 5. Group and Add to Map
+        const centerPoly = L.polygon(centerCoords, polyStyle);
+        const leftPoly = L.polygon(leftCoords, polyStyle);
+        const rightPoly = L.polygon(rightCoords, polyStyle);
+
+        this.terminatorLayer = L.layerGroup([centerPoly, leftPoly, rightPoly]).addTo(this.map);
+    },
+
+    /**
+     * Math Logic: Calculates the Latitude of the terminator for every degree of Longitude.
+     * Formula: tan(lat) = - cos(lon - sunLon) * cot(sunLat)
+     */
+    computeTerminatorPath: function(sunLat, sunLon) {
+        const path = [];
+        const D2R = Math.PI / 180;
+        const R2D = 180 / Math.PI;
+
+        // Avoid division by zero at equinoxes (sunLat = 0)
+        const effectiveSunLat = (Math.abs(sunLat) < 0.1) ? (sunLat >= 0 ? 0.1 : -0.1) : sunLat;
+        const sunPhi = effectiveSunLat * D2R;
+        const tanSunPhi = Math.tan(sunPhi);
+
+        // Iterate across the map width (-180 to 180)
+        for (let i = -180; i <= 180; i++) {
+            const lon = i;
+            const lambda = lon * D2R;
+            const sunLambda = sunLon * D2R;
+
+            const deltaLambda = lambda - sunLambda;
+            
+            // tan(lat) = - cos(deltaLambda) / tan(sunLat)
+            let tanLat = -Math.cos(deltaLambda) / tanSunPhi;
+            
+            // ArcTan to get latitude
+            let lat = Math.atan(tanLat) * R2D;
+            
+            path.push([lat, lon]);
+        }
+        return path;
     },
 
     /**
      * Handles user clicking the map -> Select location.
      */
     handleMapClick: function(e) {
+        // Wrap longitude to -180/180 standard for API calls
+        let lon = e.latlng.lng;
+        while (lon > 180) lon -= 360;
+        while (lon < -180) lon += 360;
+        
         const lat = e.latlng.lat;
-        const lon = e.latlng.lng;
         
         this.selectedLocation = { lat, lon };
         
@@ -103,46 +163,25 @@ window.MapController = {
         // 2. Update Marker
         if (this.markerLayer) this.map.removeLayer(this.markerLayer);
         this.markerLayer = L.marker([lat, lon]).addTo(this.map);
+        
+        // 3. Bind Popup with Analysis Button
+        // [Image of popup modal with charts]
+        const popupContent = `
+            <div style="text-align:center; font-family: 'Inter', sans-serif; color:#333;">
+                <b>Coordinates</b><br>
+                ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
+                <button onclick="window.Widgets.openAnalysisModal()" 
+                    style="margin-top:8px; background:#ffca28; color:#000; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    <i class="fa-solid fa-chart-line"></i> Analyze Sun Path
+                </button>
+            </div>
+        `;
+        
+        this.markerLayer.bindPopup(popupContent).openPopup();
 
-        // 3. Trigger Widget Updates (Clock, DayBar) via the global Widgets controller
+        // 4. Trigger Widget Updates
         if (window.Widgets) {
             window.Widgets.updateLocation(lat, lon);
-            // Prompt to open analysis?
-            // setTimeout(() => window.Widgets.openAnalysisModal(lat, lon), 500);
         }
-    },
-    
-    // --- Math Helper for Terminator ---
-    computeTerminatorPath: function(sunLat, sunLon) {
-        // Simple approximation of the great circle 90 degrees from sun
-        // Returns lat/lon array for Leaflet
-        const path = [];
-        const R2D = 180 / Math.PI;
-        const D2R = Math.PI / 180;
-        
-        const sunPhi = sunLat * D2R;
-        const sunLambda = sunLon * D2R;
-        
-        // We step 360 degrees around the longitude
-        for (let i = 0; i <= 360; i += 2) {
-            const lambda = (i - 180) * D2R;
-            
-            // Spherical trig to find latitude of the terminator at this longitude
-            // tan(phi) = -1 / (tan(sunPhi) * cos(lambda - sunLambda))
-            // Actually: cos(arc) = sin(sunPhi)sin(phi) + cos(sunPhi)cos(phi)cos(delta_lon) = 0
-            // tan(phi) = - cot(sunPhi) * cos(lambda - sunLambda)
-            
-            let phi = Math.atan(-1 / Math.tan(sunPhi) * Math.cos(lambda - sunLambda));
-            
-            path.push([phi * R2D, (i - 180)]);
-        }
-        
-        // To make a valid polygon for "Night", we need to close it around the anti-sun pole
-        // If sun is North, night is South pole.
-        const antiSunLat = (sunLat > 0) ? -90 : 90;
-        path.push([antiSunLat, 180]);
-        path.push([antiSunLat, -180]);
-        
-        return path;
     }
 };

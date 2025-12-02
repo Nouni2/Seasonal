@@ -98,17 +98,18 @@ class SolarEventSolver:
         """
         # 1. Find Local Solar Transit (Noon)
         # We start by estimating noon as 12:00 UTC - (Lon / 15)
-        # This gives us a solid anchor point for the day.
         
         approx_noon_utc_hour = 12.0 - (lon / 15.0)
         
-        # Handle wrap around (if noon UTC is next/prev day)
-        # For simplicity in this solver, we stick to the JD of the query_date + offset
-        # The Time class handles the math if fraction > 1 or < 0.
+        # Handle JD Conversion:
+        # JD starts at Noon. 0.0 = 12:00 UTC.
+        # So JD_Fraction = (Hour_UTC / 24.0) - 0.5
         
         t_base = Time.from_gregorian(query_date.year, query_date.month, query_date.day, 0, 0, 0)
         jd_noon_base = t_base.jd_day
-        jd_noon_frac = approx_noon_utc_hour / 24.0
+        
+        # Correctly calculate fraction relative to JD epoch (Noon)
+        jd_noon_frac = (approx_noon_utc_hour / 24.0) - 0.5
         
         # Refine Transit Time (Find exact moment H = 0)
         # We iterate a few times to center perfectly on the meridian.
@@ -120,13 +121,11 @@ class SolarEventSolver:
         alt_noon = self._get_altitude(t_transit, lat, lon, elev_m)
         
         # Check Midnight (Transit + 12h)
-        # We use +12h to check the "following" midnight
+        # We use +12h (0.5 days) to check the "following" midnight
         t_midnight = Time(t_transit.jd_day, t_transit.jd_fraction + 0.5)
         alt_midnight = self._get_altitude(t_midnight, lat, lon, elev_m)
         
         # Horizon check (usually 0 if using apparent altitude, or -0.833 geometric)
-        # Since _get_altitude returns *Apparent* altitude (refracted), 
-        # we check against 0.0 degrees (visual horizon).
         HORIZON = 0.0
         
         # Case A: Polar Night (Max altitude is below horizon)
@@ -182,10 +181,6 @@ class SolarEventSolver:
         geo_eq = SunModel.compute_geocentric_position(t)
         
         # 2. Sidereal Time
-        # Nutation is small, typically ignored for LST in rough search, 
-        # but for arcsecond precision we should include it if available.
-        # Here we do the standard calculation without nutation for speed, 
-        # or we could add it. Let's stick to standard LST for now.
         lst = SiderealTime.apparent_local(t, lon)
         
         # 3. Topocentric Parallax
@@ -195,7 +190,6 @@ class SolarEventSolver:
         hor = topo_eq.to_horizontal(lat, lst)
         
         # 5. Atmospheric Refraction
-        # Note: We check for 0.0 degrees apparent altitude in the solver.
         alt_app = CorrectionModel.apply_refraction(
             hor.altitude_degrees, 
             self.pressure_mbar, 
@@ -251,14 +245,8 @@ class SolarEventSolver:
             direction: -1 for Sunrise (Search Backwards), +1 for Sunset (Search Forwards).
         """
         # 1. Initial Bracket Guess
-        # Move 6 hours away from noon as a first guess for equinox
-        # We can be smarter: 4 hours for winter, 8 hours for summer?
-        # Fixed 6h offset is robust enough for secant initialization usually.
-        
+        # Move 6 hours away from noon
         offset_days = (6.0 / 24.0) * direction
-        
-        # Point 0 (Transit) - Not a good point for secant as Alt is max. 
-        # We need two points closer to the horizon.
         
         # Point A: 4 hours from transit
         t1_frac = t_start.jd_fraction + (4.0/24.0 * direction)
@@ -269,9 +257,6 @@ class SolarEventSolver:
         t2_frac = t_start.jd_fraction + (8.0/24.0 * direction)
         t2 = Time(t_start.jd_day, t2_frac)
         h2 = self._get_altitude(t2, lat, lon, elev)
-        
-        # If both are positive (Polar Day territory or Summer), shift B further
-        # If both are negative (Polar Night territory or Winter), shift A closer to noon
         
         # Robust Iteration
         for i in range(self.MAX_ITER):
@@ -286,7 +271,6 @@ class SolarEventSolver:
                 
             # Secant Step
             # x_new = x2 - f(x2) * (x2 - x1) / (f(x2) - f(x1))
-            # Here x is time (fractional days), f(x) is altitude
             
             # Time difference in days
             dt = (t2.jd_day - t1.jd_day) + (t2.jd_fraction - t1.jd_fraction)

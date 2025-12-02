@@ -11,7 +11,7 @@
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
     
-    <!-- Fonts (Inter for clean scientific look) -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -24,12 +24,23 @@
 </head>
 <body>
 
-    <!-- 1. The Map Layer -->
+    <!-- LAYER 1: 2D Map (Leaflet) -->
     <div id="map"></div>
 
-    <!-- 2. The HUD (Heads-Up Display) Overlays -->
+    <!-- LAYER 2: 3D Globe (Three.js) - Hidden by default -->
+    <div id="globe-container" class="hidden"></div>
+
+    <!-- LAYER 3: Transition Loader -->
+    <div id="view-loader" class="hidden">
+        <div class="loader-content">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>INITIALIZING PHYSICS ENGINE</span>
+        </div>
+    </div>
+
+    <!-- LAYER 4: HUD Overlays -->
     
-    <!-- Top Left: Location & Search -->
+    <!-- Top Left: Location -->
     <div class="hud-panel top-left">
         <div class="brand">
             <i class="fa-solid fa-sun fa-spin-pulse" style="--fa-animation-duration: 3s; color: #ffca28;"></i>
@@ -44,7 +55,7 @@
         </div>
     </div>
 
-    <!-- Top Right: Real-time Clock & Ephemeris -->
+    <!-- Top Right: Clock & Ephemeris -->
     <div class="hud-panel top-right">
         <div class="clock-widget">
             <div class="time-display" id="utc-clock">00:00:00 UTC</div>
@@ -62,10 +73,16 @@
             </div>
         </div>
         <div class="controls">
-            <!-- Calendar Picker -->
             <input type="date" id="date-picker" class="seasonal-input">
             <button id="btn-now" class="seasonal-btn" title="Reset to Now">
                 <i class="fa-solid fa-clock-rotate-left"></i> Now
+            </button>
+        </div>
+        
+        <!-- View Toggle -->
+        <div class="view-controls" style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+            <button id="btn-view-toggle" class="seasonal-btn full-width">
+                <i class="fa-solid fa-earth-americas"></i> Switch to 3D View
             </button>
         </div>
     </div>
@@ -80,18 +97,9 @@
                 <span>18:00</span>
                 <span>24:00</span>
             </div>
-            
-            <!-- The Visual Bar -->
             <div class="day-night-bar" id="day-bar">
-                <!-- Segments will be injected by JS:
-                     <div class="segment night" style="width: 25%"></div>
-                     <div class="segment day" style="width: 50%"></div>
-                     ...
-                -->
                 <div class="loading-bar">Calculating Solar Physics...</div>
             </div>
-
-            <!-- Detailed Event Times -->
             <div class="event-times">
                 <span id="txt-sunrise"><i class="fa-solid fa-sunrise"></i> --:--</span>
                 <span id="txt-transit"><i class="fa-solid fa-circle"></i> --:--</span>
@@ -101,7 +109,7 @@
         </div>
     </div>
 
-    <!-- 3. Analysis Modal (Hidden by default) -->
+    <!-- Analysis Modal -->
     <div id="analysis-modal" class="modal-backdrop hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -110,7 +118,6 @@
             </div>
             <div class="modal-body">
                 <p>Analyze solar elevation for <strong><span id="modal-loc-name">Location</span></strong>.</p>
-                
                 <div class="modal-controls">
                     <label>Range:</label>
                     <select id="analysis-range" class="seasonal-select">
@@ -120,9 +127,7 @@
                     </select>
                     <button id="btn-run-analysis" class="seasonal-btn primary">Compute Physics</button>
                 </div>
-
                 <div id="analysis-plot" class="plot-container">
-                    <!-- Plotly Graph goes here -->
                     <div class="placeholder-text">Select range and click Compute.</div>
                 </div>
             </div>
@@ -130,26 +135,23 @@
     </div>
 
     <!-- Scripts -->
-    <!-- Leaflet -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>
-     
-    <!-- Leaflet Terminator (Day/Night Overlay) - We might implement custom or use a plugin logic in JS -->
-    <!-- We will implement the custom logic in map_controller.js using the subsolar point API -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Three.js OrbitControls (CRITICAL FOR MOVING) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-    <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
     <!-- App Logic -->
     <script src="/static/js/widgets.js"></script>
     <script src="/static/js/map_controller.js"></script>
+    <script src="/static/js/globe_controller.js"></script>
     
     <script>
-        // Bootstrapper
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Seasonal Web Interface Initializing...");
-            // Initialize controllers (defined in the JS files)
             if(window.MapController) window.MapController.init();
             if(window.Widgets) window.Widgets.init();
         });
