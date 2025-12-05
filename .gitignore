@@ -27,3 +27,4 @@ htmlcov/
 .idea/
 tests/
 examples/
+test_runner.py
