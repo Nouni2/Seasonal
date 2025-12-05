@@ -77,11 +77,11 @@ class Time:
             self.jd_fraction += 1.0
 
     @classmethod
-    def from_gregorian(cls, year: int, month: int, day: int, 
+    def from_gregorian(cls, year: int, month: int, day: int,
                        hour: int = 0, minute: int = 0, second: float = 0.0) -> 'Time':
         """
         Creates a Time object from a Calendar date (UTC).
-        
+
         Implements Meeus Algorithm 7.1.
         Automatically handles the Julian/Gregorian calendar switch (1582-10-15).
         
@@ -96,6 +96,9 @@ class Time:
         Returns:
             Time: A new Time instance.
         """
+        # Preserve the original civil date for Gregorian/Julian boundary checks
+        orig_year, orig_month, orig_day = year, month, day
+
         # 1. Handle Jan/Feb adjustment
         # If month is 1 or 2, it is treated as month 13 or 14 of the previous year.
         if month <= 2:
@@ -103,62 +106,15 @@ class Time:
             month += 12
 
         # 2. Determine Calendar Type (Julian vs Gregorian)
-        # The transition occurred on Oct 15, 1582. Dates before this are Julian.
-        # Note: We check the *original* year/month/day before the Jan/Feb adjustment?
-        # Meeus 7.1 implies the check is done on the date itself.
-        # However, since we modified Y/M, we must use the modified values carefully,
-        # or essentially check the date strictly.
-        # Strict check: 1582.1015
-        
-        # Using floating point comparison for date boundary
-        # Note: We use the modified year/month for calculation, but the calendar
-        # check assumes standard date. Let's rely on the Meeus B calculation logic.
-        
-        # Determine B (Gregorian Calendar Correction)
-        # B = 2 - A + INT(A/4)
-        # For Julian Calendar, B = 0.
-        
-        # Check boundary: 1582-10-15
-        # We need to check against the date provided.
-        # Adjust year/month back for the check if needed, or simply check:
-        # If (Year > 1582) OR (Year == 1582 AND Month > 10) OR (Year == 1582 AND Month == 10 AND Day >= 15)
-        # But since we modified Year/Month above (Jan/Feb become 13/14 of Prev Year),
-        # we can't easily compare Year directly without reversion.
-        
-        # Safer Approach: Check validity using the passed arguments (unmodified)
-        is_gregorian = True
-        orig_year = year + 1 if month > 12 else year # Revert adjustment if applicable? No, simple args.
-        # Actually, simpler:
-        # Convert inputs to a comparable float YYYY.MMDD
-        # Note: Arguments 'year', 'month' inside this function are already modified.
-        # Let's verify based on the modified values.
-        # If M > 12, it was Jan/Feb of (Y+1).
-        
-        # Let's assume standard Gregorian for everything >= 1582-10-15
-        
-        A = math.floor(year / 100.0)
-        
-        # Calculate B based on Calendar Date
-        # Recover original date logic for the switch
-        check_year = year
-        check_month = month
-        if month > 12:
-            check_year += 1
-            check_month -= 12
-            
-        is_julian = False
-        if check_year < 1582:
-            is_julian = True
-        elif check_year == 1582:
-            if check_month < 10:
-                is_julian = True
-            elif check_month == 10 and day < 15:
-                is_julian = True
-        
-        if is_julian:
-            B = 0
-        else:
+        # The Meeus 7.1 correction term (B) is only applied to dates on/after
+        # 1582-10-15, the first day of the Gregorian calendar. Earlier dates use
+        # the Julian calendar with B = 0.
+        is_gregorian = cls._is_on_or_after_gregorian_start(orig_year, orig_month, orig_day)
+        if is_gregorian:
+            A = math.floor(year / 100.0)
             B = 2 - A + math.floor(A / 4.0)
+        else:
+            B = 0
 
         # 3. Compute Integer Julian Day (at Noon of the given date)
         # 365.25 * (Y + 4716) accounts for the Julian cycle
@@ -227,12 +183,25 @@ class Time:
     def julian_centuries_tt(self) -> float:
         """
         Returns 'T' (Julian Centuries since J2000.0) in Terrestrial Time.
-        
+
         This is the standard 'T' variable for Meeus/VSOP87 algorithms.
         Includes high-precision split calculation to minimize floating point error.
         """
         d_tt, f_tt = self.jd_tt
         return self._calc_julian_centuries(d_tt, f_tt)
+
+    @staticmethod
+    def _is_on_or_after_gregorian_start(year: int, month: int, day: int) -> bool:
+        """Return True when the civil date is on/after 1582-10-15 (Gregorian start)."""
+        if year > 1582:
+            return True
+        if year < 1582:
+            return False
+        if month > 10:
+            return True
+        if month < 10:
+            return False
+        return day >= 15
     
     @property
     def decimal_year(self) -> float:
@@ -240,7 +209,8 @@ class Time:
         Calculates the decimal year (e.g., 2025.471) based on UTC.
         Required for the Espenak Delta T polynomials.
         """
-        # Approximate algorithm suitable for Delta T lookup
+        # Approximate algorithm suitable for Delta T lookup; not intended for
+        # high-precision civil date interpolation.
         # JD of 2000.0 (Jan 1.5) is 2451545.0
         t = self.julian_centuries_utc
         return 2000.0 + (t * 100.0)
