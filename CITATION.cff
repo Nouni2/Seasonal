@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use Seasonal in your research, teaching, or publications, please cite it as follows."
+title: "Seasonal: High-Precision Solar Tracking Engine"
+authors:
+  - family-names: "Youssoufi"
+    given-names: "Marwane"
+version: "1.0.0"
+date-released: "2025-12-05"
+license: "GPL-3.0"
+repository-code: "https://github.com/Nouni2/Seasonal"

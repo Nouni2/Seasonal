@@ -7,9 +7,19 @@ The goal is **arcsecond-level accuracy** suitable for scientific, architectural,
 
 For the full mathematical specification and derivations, see **[`docs/math.md`](docs/math.md)**.
 
-### Citing Seasonal / Academic Use
+---
 
-If you use Seasonal in academic work, please cite it. A `CITATION.cff` file will be added to this repository to provide a ready-to-use reference format; in the meantime, attribute the project as “Seasonal solar position engine (GPLv3)” with the repository URL.
+## Citing Seasonal / Academic Use
+
+If you use Seasonal in research, teaching, or publications, please cite it.
+
+Machine-readable citation metadata is provided in **[`CITATION.cff`](./CITATION.cff)**, which GitHub and tools like Zenodo can parse directly.
+
+A typical citation would be:
+
+> Youssoufi, M. (2025). *Seasonal: High-Precision Solar Tracking Engine* (Version 1.0.0) \[Computer software\]. GPL-3.0. Available at https://github.com/Nouni2/Seasonal
+
+For exact fields and alternate formats (BibTeX, etc.), use the contents of `CITATION.cff` or the “Cite this repository” button on GitHub.
 
 ---
 
@@ -150,6 +160,16 @@ The frontend uses:
 
 ---
 
-## 5. License
+## 5. Contributing
 
-This project is distributed under the **GNU General Public License v3.0 (GPLv3)**. You are free to use, study, modify, and redistribute the code, but any distributed modified or extended versions must also be released under GPLv3. For full details, see the [`LICENSE`](LICENSE) file.
+Contributions, bug reports, and improvements are welcome.
+
+For contribution guidelines (code style, testing expectations, and workflow), see **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**. By contributing, you agree that your changes are released under the same license as the project (GPLv3).
+
+---
+
+## 6. License
+
+This project is distributed under the **GNU General Public License v3.0 (GPLv3)**. You are free to use, study, modify, and redistribute the code, but any distributed modified or extended versions must also be released under GPLv3.
+
+For the full legal text, see the [`LICENSE`](LICENSE) file.
