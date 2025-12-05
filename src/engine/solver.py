@@ -139,7 +139,7 @@ class SolarEventSolver:
             
         # Case B: Polar Day (Min altitude is above horizon)
         if alt_midnight > HORIZON:
-             return SolarDayResult(
+            return SolarDayResult(
                 date_query=query_date,
                 day_type="POLAR_DAY",
                 transit_time=t_transit,
