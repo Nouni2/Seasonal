@@ -26,3 +26,4 @@ htmlcov/
 .vscode/
 .idea/
 tests/
+examples/
