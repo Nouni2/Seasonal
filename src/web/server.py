@@ -36,7 +36,7 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -80,6 +80,10 @@ class AnalyzeReq(LocationReq):
     start_date: str  # YYYY-MM-DD
     end_date: str    # YYYY-MM-DD
 
+class SubsolarReq(BaseModel):
+    # ISO Format datetime string (e.g., "2025-06-21T12:00:00")
+    datetime_str: str
+
 class SubsolarResponse(BaseModel):
     lat: float
     lon: float
@@ -117,6 +121,8 @@ app.add_middleware(
 # Files in src/web/static will be available at /static
 # Files in src/web/templates will be served at root (logic below)
 static_path = os.path.join(current_dir, "static")
+# We create the static directory at import time so developers can run the app
+# immediately after cloning, but this will fail in read-only environments.
 if not os.path.exists(static_path):
     os.makedirs(static_path)
     os.makedirs(os.path.join(static_path, "css"), exist_ok=True)
@@ -180,14 +186,13 @@ async def get_position(req: EphemerisReq):
     )
 
 @app.post("/api/subsolar", response_model=SubsolarResponse)
-async def get_subsolar(req: dict = Body(...)):
+async def get_subsolar(req: SubsolarReq):
     """
     Calculates the Subsolar Point (Lat/Lon where sun is zenith).
     Used to center the Day/Night shade map.
     Input: {"datetime_str": "..."}
     """
-    dt_str = req.get("datetime_str")
-    t = parse_time(dt_str)
+    t = parse_time(req.datetime_str)
     
     # 1. Get Sun Position (Geocentric)
     # Subsolar Lat ~= Declination
