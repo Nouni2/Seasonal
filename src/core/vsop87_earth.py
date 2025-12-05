@@ -46,6 +46,7 @@ from typing import List, Tuple
 from .time_struct import Time
 
 # VSOP87D Earth data file is stored relative to this module.
+# VSOP87D.ear is a required data file distributed with the repository.
 # The path is resolved at runtime so the module can be imported from any cwd.
 _VSOP_FILE_REL_PATH = os.path.join("VSOP87D_data", "VSOP87D.ear")
 
@@ -191,13 +192,9 @@ def _load_vsop87_earth_if_needed() -> None:
                         break
                 continue
 
-            # Ensure the list for this power exists and is empty if reused.
-            if target_array[power_n] is None:
-                target_array[power_n] = []
-            else:
-                # Terms may be appended if file contains multiple blocks
-                # for the same power, though for VSOP87D.ear this is not expected.
-                pass
+            # Terms may be appended if file contains multiple blocks
+            # for the same power, though for VSOP87D.ear this is not expected.
+            target_terms = target_array[power_n]
 
             # Read num_terms data lines and extract (A, B, C).
             for _ in range(num_terms):
@@ -223,7 +220,7 @@ def _load_vsop87_earth_if_needed() -> None:
                     # Non-numeric data is skipped.
                     continue
 
-                target_array[power_n].append((A, B, C))
+                target_terms.append((A, B, C))
 
     _VSOP_LOADED = True
 
