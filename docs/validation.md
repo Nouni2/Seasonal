@@ -1,5 +1,7 @@
 # Seasonal: Validation & Verification Protocol
 
+License: GPLv3
+
 ## 1. Objective
 
 To certify that the Seasonal engine achieves arcsecond-level precision ($\pm 0.00028^\circ$) by comparing its output against the NASA Jet Propulsion Laboratory (JPL) Horizons On-Line Ephemeris System.

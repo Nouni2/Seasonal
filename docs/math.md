@@ -1,5 +1,7 @@
 # Seasonal: Mathematical & Physical Reference
 
+License: GPLv3
+
 ## 1. Introduction
 
 This document constitutes the rigorous "First Principles" definition for the Seasonal solar tracking engine. It provides a complete mathematical specification for converting a specific instant in Universal Coordinated Time (UTC) and a specific Geodetic Location (Latitude $\phi$, Longitude $\lambda$, Elevation $H$) into high-precision Topocentric Horizontal Coordinates (Altitude $h$ and Azimuth $A$).
