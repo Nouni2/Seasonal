@@ -254,11 +254,12 @@ class Time:
             
         # ----------------------------------------------------------------------
         # 2. Prediction Era (2050 - 2150)
+        # Use the same parabolic extrapolation as the far-future model to avoid
+        # overlapping with the 2005-2050 polynomial.
         # ----------------------------------------------------------------------
         if 2050 <= y < 2150:
-            # Approximate linear/parabolic continuation
-            t = y - 2000.0
-            return 62.92 + 0.32217 * t + 0.005589 * t * t
+            t = (y - 1820.0) / 100.0
+            return -20 + 32 * t * t
 
         # ----------------------------------------------------------------------
         # 3. GPS/Atomic Era (1986 - 2005)
