@@ -1,10 +1,34 @@
 cff-version: 1.2.0
 message: "If you use Seasonal in your research, teaching, or publications, please cite it as follows."
 title: "Seasonal: High-Precision Solar Tracking Engine"
+
 authors:
   - family-names: "Youssoufi"
     given-names: "Marwane"
-version: "1.0.0"
+
+version: "0.9.0"
 date-released: "2025-12-05"
 license: "GPL-3.0"
+
 repository-code: "https://github.com/Nouni2/Seasonal"
+
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.17832852"
+    description: "Concept DOI representing all versions of Seasonal."
+
+abstract: >
+  Seasonal is a high-precision solar position engine providing apparent
+  altitude and azimuth using a full physical model (VSOP87D, nutation,
+  aberration, refraction, and topocentric corrections). It includes a
+  FastAPI backend and interactive web interface for 2D and 3D geospatial
+  visualization.
+
+keywords:
+  - solar position
+  - ephemeris
+  - astronomy
+  - solar geometry
+  - scientific computing
+  - VSOP87D
+  - daylight analysis
