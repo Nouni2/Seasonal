@@ -102,8 +102,6 @@ For each test vector, the Seasonal engine output must be compared to the JPL CSV
 
 To ensure "Non-Destructive" testing:
 
-Download: We will manually download the CSVs for Scenarios A-E from JPL Horizons.
-
-Storage: Save them in tests/reference_data/.
-
-Runner: The Python test runner (pytest) will load these CSVs, run the Engine for the same timestamps, and assert that the difference is within Tolerance.
+- Download: We plan to manually download the CSVs for Scenarios A-E from JPL Horizons.
+- Storage: The reference CSVs will be stored in `tests/reference_data/` once they are added to the repo.
+- Runner: A pytest harness will load these CSVs, run the Engine for the same timestamps, and assert that the difference is within tolerance (harness not yet committed).
