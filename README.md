@@ -7,6 +7,10 @@ The goal is **arcsecond-level accuracy** suitable for scientific, architectural,
 
 For the full mathematical specification and derivations, see **[`docs/math.md`](docs/math.md)**.
 
+### Citing Seasonal / Academic Use
+
+If you use Seasonal in academic work, please cite it. A `CITATION.cff` file will be added to this repository to provide a ready-to-use reference format; in the meantime, attribute the project as “Seasonal solar position engine (GPLv3)” with the repository URL.
+
 ---
 
 ## 1. Features
