@@ -25,3 +25,4 @@ htmlcov/
 # IDE / editor config
 .vscode/
 .idea/
+tests/
