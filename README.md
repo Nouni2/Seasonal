@@ -1,183 +1,151 @@
 # Seasonal: High-Precision Solar Tracking Engine
 
-## 1. Project Overview
+Seasonal is a high-precision solar position engine with a web-based UI.  
+It computes the Sun’s apparent position (altitude/azimuth) using a full physical model (VSOP87D Earth ephemeris, nutation, aberration, topocentric parallax, atmospheric refraction) and exposes it via a FastAPI backend and browser front-end (2D map + 3D globe).
 
-Seasonal is a high-performance scientific application designed to model the position of the sun (Altitude $h$, Azimuth $\alpha$) with astronomical precision. Unlike standard solar calculators or game engine plugins that rely on simplified geometric approximations suitable for casual visual simulation, Seasonal targets scientific, architectural, and engineering use cases where arcsecond-level accuracy is mandatory.
+The goal is **arcsecond-level accuracy** suitable for scientific, architectural, and solar engineering use, not just “good enough for visuals” game-style sun tracking.
 
-Core Objective: To achieve rigorous scientific accuracy by implementing a complete, "First Principles" astronomical model. This involves moving beyond simple Keplerian orbits to account for complex physical phenomena and reference frame discrepancies that affect observation from the Earth's surface. The engine is designed to be the "Gold Standard" against which simpler models are tested.
+For the full mathematical specification and derivations, see **[`docs/math.md`](docs/math.md)**.
 
-### 1.1 Physical Phenomena Modeled
+---
 
-To transition from "Game Precision" (~0.01°) to "Scientific Precision" (arcseconds), the model explicitly handles the following:
+## 1. Features
 
-**Time Dilation and Reference Frames:** The model strictly differentiates between Terrestrial Time ($TT$) and Universal Coordinated Time ($UTC$). $TT$ is a uniform time scale based on atomic clocks and is the independent variable for orbital ephemerides. $UTC$, however, is tied to the Earth's irregular rotation (affected by tidal braking and core dynamics). The difference, $\Delta T = TT - UTC$, changes non-linearly over time and must be accounted for. Ignoring this results in a longitudinal drift where the calculated sun position is physically correct but the Earth has not rotated to the expected angle underneath it.
+- **High-precision ephemeris**
+  - VSOP87D-based Earth heliocentric model for the Sun’s apparent motion.
+  - Full time system handling (UTC vs TT, ΔT polynomials).
+  - Nutation, true obliquity, and annual aberration corrections.
 
-**Topocentric Parallax:** Standard algorithms calculate the sun's position relative to the center of the Earth (Geocentric coordinates). Seasonal corrects for the observer's specific position on the Earth's crust (Topocentric coordinates). Since the Earth's average radius is approximately 6,378 km, the difference between the geocentric and topocentric view can shift the sun's apparent position by nearly 8.794 arcseconds. This parallax error is negligible for casual observation but critical for high-precision tracking systems (e.g., concentrated solar power).
+- **Observer-centric physics**
+  - Topocentric parallax on an ellipsoidal Earth (WGS84).
+  - Atmospheric refraction using Saemundsson’s formula with pressure/temperature scaling.
+  - Output in standard horizontal coordinates (altitude, azimuth; 0° azimuth = North, 90° = East).
 
-**Atmospheric Refraction:** Light bends as it passes through the stratified layers of the Earth's atmosphere, making the sun appear higher than it geometrically is. This effect is most pronounced near the horizon, where the refraction can reach 34 arcminutes (more than the diameter of the sun itself). The model incorporates robust refraction algorithms (dependent on standard atmosphere or user-supplied temperature/pressure) to correct the geometric altitude ($h_{geom}$) to the apparent altitude ($h_{app}$).
+- **Daylight and events**
+  - Sunrise, sunset, transit (local solar noon) and day length classification:
+    - NORMAL
+    - POLAR_DAY
+    - POLAR_NIGHT
 
-**Nutation & Aberration:** The Earth's inertial frame is not static.
+- **Web UI**
+  - FastAPI backend serving:
+    - Real-time ephemeris (alt/az).
+    - Subsolar point (for terminator / day–night map).
+    - Day events and day length per date.
+    - Time-series analysis of day length over a range.
+  - Frontend:
+    - **2D map** (Leaflet) with live day–night terminator overlay.
+    - **3D globe** (Three.js) with:
+      - Day/night textures
+      - Night lights
+      - Cloud layer and atmosphere glow
+      - Click-to-select location using raycasting.
+    - HUD with:
+      - UTC clock + approximate local mean solar time.
+      - Live altitude/azimuth readout at chosen location.
+      - 24h day/night bar with sunrise/sunset and duration.
+      - Analysis modal with Plotly charts of day length vs date.
 
-Nutation: The Earth's axis "wobbles" slightly due to the gravitational torque of the Moon and Sun, creating periodic oscillations in the obliquity of the ecliptic.
+---
 
-Aberration: Because light has a finite speed ($c$) and the Earth is moving through space with velocity ($v$), the position of the sun appears slightly shifted (the "Rain" analogy—tilting your umbrella forward when running).
-Both effects are modeled to ensure the coordinate system aligns with physical reality.
+## 2. Architecture Overview
 
-### 1.2 Key Architectural Features
+Seasonal is structured into three main layers:
 
-**Non-Destructive Sampling (The "Infinite Zoom"):** Traditional simulations often pre-calculate positions into fixed arrays (e.g., one point every minute), which destructively quantizes data and permanently loses information between time steps. Seasonal uses an adaptive "Oracle" architecture where the underlying mathematical function is stateless and continuous. This allows the user to query the sun's position at any temporal resolution—from centuries down to microseconds—without loss of precision or massive memory overhead.
+1. **Core Physics (`src/core`)**  
+   Pure math and physics:
+   - Time representation and ΔT
+   - VSOP87D Earth model
+   - Ecliptic/Equatorial/Horizontal coordinate transformations
+   - Sidereal time
+   - Topocentric parallax
+   - Atmospheric refraction
 
-**Massive Scalability via Multiprocessing:** The engine is architected to handle "Sweeps"—large-scale simulations that calculate solar parameters across vast ranges of latitudes (e.g., -90° to +90°) and long epochs (e.g., 100 years). Since the core math is stateless, these calculations are "embarrassingly parallel." The computation layer utilizes Python's multiprocessing capabilities to distribute the load across all available CPU cores, maximizing hardware utilization.
+2. **Engine / Solver (`src/engine`)**  
+   High-level logic built on the core physics:
+   - `SolarEventSolver` for sunrise, sunset, transit, and day-length classification.
+   - Numerical methods (transit refinement, secant solver for altitude=0).
 
-**Hybrid Storage Architecture:** The system employs a dual-storage strategy to optimize performance and data integrity.
+3. **Web Layer (`src/web`)**  
+   API and user interface:
+   - FastAPI app (`server.py`) exposing endpoints:
+     - `/api/ephemeris` – Sun’s apparent position for a given instant.
+     - `/api/subsolar` – Subsolar point (lat/lon) at a given instant.
+     - `/api/day-events` – Sunrise, sunset, transit and day type for a date.
+     - `/api/analyze` – Day-length time series for a date range.
+   - Static assets:
+     - `static/css` – HUD and layout styling.
+     - `static/js` – Map controller, globe controller, widgets/controller logic.
+     - `static/assets/textures` – Earth textures for the 3D globe.
+   - HTML template:
+     - `templates/index.html` – Main single-page interface.
 
-* SQLite: Used for lightweight metadata, user-defined locations, application settings, and discrete events (like specific sunrise times).
-* HDF5 (Hierarchical Data Format): Massive numerical datasets generated by sweeps (millions of floating-point records) are streamed directly to HDF5 files. This format is optimized for high-speed I/O and allows for efficient slicing and subsetting of data without loading the entire dataset into RAM.
+---
 
-## 2. Technical Environment
+## 3. Mathematical Model (Short Version)
 
-The technical stack is chosen to balance rapid development, scientific accuracy, and high-performance visualization.
+The high-level pipeline to get from a civil timestamp and location to altitude/azimuth is:
 
-**Language: Python 3.10+**
-Python is the lingua franca of scientific computing. We target version 3.10+ to leverage modern features such as structural pattern matching (match/case) for state handling and improved type hinting, which is crucial for maintaining a complex mathematical codebase.
+1. **Time handling**
+   - Input: calendar date/time in UTC.
+   - Convert to Julian Date (JD) with a split representation:
+     - `jd_day` (integer day)
+     - `jd_fraction` (fraction of day)
+   - Compute ΔT = TT − UTC using Espenak/Meeus polynomials.
+   - Obtain TT-based JD and Julian centuries `T` for orbital work.
 
-**Virtual Environment: SeasonalVenv**
-Strict environment isolation is enforced. SeasonalVenv ensures that specific versions of scientific libraries are pinned, preventing "dependency drift" and ensuring that the mathematical results are reproducible across different machines.
+2. **Heliocentric → Geocentric**
+   - Use VSOP87D Earth series to get the Earth’s heliocentric ecliptic coordinates (L, B, R).
+   - Invert the vector to get Sun’s geocentric ecliptic position.
+   - Apply nutation and annual aberration corrections.
+   - Compute true obliquity of the ecliptic.
 
-**GUI Framework: PyQt6**
-PyQt6 is selected for the desktop interface over simpler wrappers like Tkinter. It provides a professional, native look and feel and offers robust event handling. Crucially, it allows for the integration of QWebEngineView. This component enables the embedding of modern, GPU-accelerated web maps (Leaflet.js or OpenStreetMap) directly into the Python application, offering a superior interactive experience (zooming, panning, tiling) compared to static plotting libraries.
+3. **Ecliptic → Equatorial**
+   - Transform apparent ecliptic longitude/latitude to geocentric equatorial coordinates (RA, Dec).
 
-**Core Libraries:**
+4. **Earth rotation**
+   - Compute Greenwich Mean Sidereal Time (GMST) from JD.
+   - Apply equation of the equinoxes for apparent sidereal time.
+   - Add observer longitude for Local Apparent Sidereal Time (LST).
 
-* numpy: Essential for vectorized mathematical operations. It allows us to perform orbital calculations on arrays of millions of time steps simultaneously (SIMD instructions) rather than using slow Python loops.
-* sqlalchemy: Provides an Object-Relational Mapping (ORM) layer. This abstracts raw SQL, protecting the code from injection attacks and allowing for easy migration between database backends (e.g., switching from SQLite to PostgreSQL for a future web port) without rewriting logic.
-* h5py: The industry standard for interacting with HDF5 files, enabling the efficient storage and retrieval of gigabytes of simulation data.
-* pandas: Used for high-level data manipulation, time-series analysis, and formatting the results for export or display.
+5. **Topocentric corrections**
+   - Model observer’s position on WGS84 ellipsoid using latitude, elevation and flattening.
+   - Apply solar parallax to shift from geocentric to topocentric RA/Dec.
 
-## 3. Project Structure
+6. **Equatorial → Horizontal**
+   - Use LST and topocentric RA/Dec to compute:
+     - Hour angle
+     - Geometric altitude and azimuth (compass convention: 0° = North).
 
-The architecture enforces a strict Separation of Concerns, isolating the Pure Math (Stateless) from the Application Logic (Stateful) and the Presentation (User Interface). This modularity ensures testability and prevents "Spaghetti Code."
+7. **Atmospheric refraction**
+   - If the geometric altitude is near the horizon, apply Saemundsson’s refraction formula.
+   - Scale refraction by pressure and temperature.
+   - Return apparent altitude.
 
-```text
-/Seasonal
-├── .gitignore               # Standard Python gitignore (excludes /venv, /data, __pycache__)
-├── README.md                # Public facing documentation and usage guide
-├── requirements.txt         # Pinned versions of all dependencies
-├── config.yaml              # Global settings (Delta T source path, default lat/lon, thread counts)
-├── main.py                  # Application Entry Point (Bootstrapper)
-│
-├── data/                    # [LOCAL ONLY - IGNORED IN GIT] 
-│   ├── seasonal.db          # SQLite database (Stores user locations, saved views, event logs)
-│   └── exports/             # HDF5/Binary blobs for massive sweep data storage
-│
-├── docs/                    # Mathematical proofs, reference papers, and developer notes
-│
-├── src/                     # Source Code
-    ├── __init__.py
-    │
-    ├── core/                # LAYER 1: THE ORACLE (Pure Math, Stateless)
-    │   # This layer contains only physics and math equations. No loops, no DB access, no threads.
-    │   # It is purely functional: Input (Time, Location) -> Output (Coordinates).
-    │   ├── __init__.py
-    │   ├── time_struct.py   # Custom Time Class (Handles JD_int + JD_frac split for precision)
-    │   ├── coordinates.py   # Coordinate Transformations (Ecliptic -> Equatorial -> Horizontal)
-    │   ├── sun_model.py     # Solar Position Algorithms (Implementation of Meeus/VSOP87)
-    │   └── corrections.py   # Physical corrections: Nutation, Aberration, Parallax, Refraction
-    │
-    ├── engine/              # LAYER 2: THE SOLVER (Logic, Optimization, State)
-    │   # This layer orchestrates the core math to solve specific problems.
-    │   ├── __init__.py
-    │   ├── solver.py        # Root-finding algorithms (Newton-Raphson for Sunrise/Sunset/Zenith)
-    │   ├── streamer.py      # Iterator/Generator patterns for adaptive curve plotting
-    │   └── compute_farm.py  # Multiprocessing manager for distributing heavy sweeps
-    │
-    ├── data_layer/          # LAYER 3: PERSISTENCE (I/O Abstraction)
-    │   # This layer handles saving and loading data.
-    │   ├── __init__.py
-    │   ├── db_manager.py    # SQL Connection handling and session management
-    │   └── models.py        # SQLAlchemy ORM Models defining the DB Schema
-    │
-    └── gui/                 # LAYER 4: PRESENTATION (User Interface)
-        # This layer handles user interaction and visualization.
-        ├── __init__.py
-        ├── main_window.py   # Main PyQt6 Container and layout management
-        ├── map_view.py      # Wrapper for QWebEngineView to display interactive maps
-        └── plotting.py      # Matplotlib/Plotly Canvas for scientific graphing components
-```
+For step-by-step formulas and more detailed derivations, see **[`docs/math.md`](docs/math.md)**.
 
-## 4. Mathematical Pipeline
+---
 
-To ensure numerical stability over centuries and across the globe, the model follows a strict, unidirectional transformation pipeline. Every calculation depends on the rigorous definition of the inputs.
+## 4. Running Seasonal Locally
 
-### 4.1 Time Architecture: The High-Precision Clock
+### Requirements
 
-A major source of error in long-term astronomical simulations is floating-point jitter (IEEE 754 precision limits). Standard 64-bit floats have only ~15-17 significant digits. Counting seconds from 1970 to 2025 results in a number roughly $1.7 \times 10^9$. If we try to represent microseconds or nanoseconds within that same number, we lose precision.
+- **Python**: 3.10+
+- **Backend Python packages** (typical):
+  - `fastapi`
+  - `uvicorn`
+  - `pydantic`
+- Core math uses only the standard library (`math`, `dataclasses`, etc.), no heavy scientific stack is required for the current code.
 
-Data Structure: To mitigate this, Time is defined as a composite structure, similar to how JPL handles time:
-Time { int JdDay; double JdFraction; }
-Calculations are performed by keeping the large integer day count separate from the fractional time of day until the final step of the algorithm.
+The frontend uses:
 
-Standard Correction ($\Delta T$):
-The rotation of the Earth is slowing down due to tidal braking caused by the Moon. Therefore, solar calculations are done in Terrestrial Time ($TT$), which is uniform. However, observers live in Universal Coordinated Time ($UTC$).
+- Leaflet (via CDN)
+- Three.js (via CDN)
+- Plotly (via CDN)
+- Font Awesome + Google Fonts (via CDN)
 
-$$TT = UTC + \Delta T$$
+---
 
-$\Delta T$ is derived from historical IERS tables for the past and polynomial approximations (like those by Espenak/Meeus) for the future. Currently, $\Delta T$ is approximately 69 seconds.
+## 5. License
 
-### 4.2 Computation Steps
-
-The pipeline transforms a time and location into sky coordinates through eight distinct stages:
-
-**Time Normalization:**
-Convert the dynamic date (including the $\Delta T$ correction) into Julian Centuries ($T$) relative to the standard epoch J2000.0 (January 1, 2000, at 12:00 TT). This scales the time variable to the units expected by the orbital polynomials.
-
-$$T = \frac{JDE - 2451545.0}{36525}$$
-
-**Geometric Mean Coordinates:**
-Calculate the "average" position of the Sun assuming a perfect elliptical orbit. This involves finding the Mean Longitude ($L_0$), Mean Anomaly ($M$), and the Eccentricity ($e$) of Earth's orbit for that specific century.
-
-**Kepler’s Equation Solver:**
-The Earth moves faster when closer to the Sun (Perihelion) and slower when further away (Aphelion). To account for this non-linear velocity, we must solve the transcendental Kepler Equation to find the Eccentric Anomaly ($E$). Since this cannot be solved algebraically, we use Newton-Raphson iteration for rapid convergence:
-
-$$E_{n+1} = E_n - \frac{E_n - e \sin E_n - M}{1 - e \cos E_n}$$
-
-Usually, 3 to 4 iterations are sufficient to reach machine precision.
-
-**True & Apparent Longitude:**
-
-True Longitude ($\Theta$): Convert the Eccentric Anomaly into the true geometric angle using the Equation of Center.
-
-Apparent Longitude ($\lambda_{app}$): Correct for physical perturbations.
-
-Nutation: Corrects for the periodic oscillation of the Earth's axis.
-
-Aberration: Corrects for the finite speed of light (approx. 8 minutes for light to reach Earth), shifting the apparent source of the photons.
-
-$$\lambda_{app} = \Theta - \text{Nutation} - \text{Aberration}$$
-
-**Equatorial Transformation:**
-Convert coordinates from the Ecliptic system (the plane of the solar system) to the Equatorial system (the plane of Earth's equator). This requires calculating the True Obliquity ($\epsilon$) of the ecliptic.
-
-Right Ascension ($\alpha$): The celestial equivalent of longitude.
-
-Declination ($\delta$): The celestial equivalent of latitude.
-
-**Topocentric Correction (Parallax):**
-The previous steps assume the observer is at the center of the Earth. We now shift the origin to the observer's specific latitude, longitude, and elevation. This uses the Earth's geoid shape (WGS84 flattening factor) to calculate the observer's 3D offset ($\rho \sin \phi', \rho \cos \phi'$).
-
-$\alpha \rightarrow \alpha'$ (Topocentric Right Ascension)
-
-$\delta \rightarrow \delta'$ (Topocentric Declination)
-
-**Horizontal Transformation:**
-Convert the topocentric equatorial coordinates into the observer's local horizon frame (Altitude and Azimuth). This relies on the Local Sidereal Time ($\theta$), which couples the celestial position to the Earth's rotation.
-
-Altitude ($h$): Angular height above the ideal horizon (0° to 90°).
-
-Azimuth ($A$): Compass direction (measured from North, 0° to 360°).
-
-**Refraction Correction:**
-Finally, correct for the atmosphere. If the geometric altitude $h > -0.5^\circ$, the sun is physically visible. We apply a refraction model (Bennett’s formula or Saemundsson’s formula) to lift the apparent altitude.
-
-$$h_{app} = h_{geom} + R(h_{geom}, P, T)$$
-
+This project is distributed under the **GNU General Public License v3.0 (GPLv3)**. You are free to use, study, modify, and redistribute the code, but any distributed modified or extended versions must also be released under GPLv3. For full details, see the [`LICENSE`](LICENSE) file.

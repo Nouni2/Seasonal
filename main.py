@@ -1,32 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Seasonal: Application Entry Point
-=================================
+Seasonal: Web Application Entry Point
+=====================================
 
-Bootstraps the PyQt6 Application and launches the Main Window.
+Starts the FastAPI server that exposes the Seasonal engine and web UI.
 """
 
-import sys
-import os
+import uvicorn
 
-# Ensure src is in path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from PyQt6.QtWidgets import QApplication
-from src.gui.main_window import MainWindow
+def main() -> None:
+    """
+    Start the Seasonal FastAPI application using Uvicorn.
 
-def main():
-    # 1. Init Qt Application
-    app = QApplication(sys.argv)
-    app.setApplicationName("Seasonal")
-    app.setOrganizationName("ScientificCommunity")
-    
-    # 2. Launch Main Window
-    window = MainWindow()
-    window.show()
-    
-    # 3. Event Loop
-    sys.exit(app.exec())
+    The application instance `app` is defined in `src.web.server`.
+    """
+    uvicorn.run(
+        "src.web.server:app",  # Import path to the FastAPI app
+        host="0.0.0.0",        # Bind on all interfaces
+        port=8000,             # Default HTTP port for the development server
+        reload=True,           # Enable auto-reload during development
+    )
+
 
 if __name__ == "__main__":
     main()
