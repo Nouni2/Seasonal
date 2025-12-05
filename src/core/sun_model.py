@@ -3,16 +3,16 @@
 Seasonal Core: Solar Ephemeris Model
 ====================================
 
-This module implements the "First Principles" orbital mechanics to calculate the
-Sun's position relative to the Earth's center (Geocentric).
+This module computes the apparent geocentric equatorial coordinates of the Sun
+using a high-precision heliocentric Earth model (VSOP87D).
 
 Algorithms:
-    - **Mean Orbital Elements**: Meeus Chapter 25 (VSOP87 truncated).
-    - **Kepler's Equation**: Newton-Raphson iteration for eccentric anomaly.
-    - **Perturbations**: 
-        - Nutation (IAU 2000B simplified).
-        - Aberration (Ron/Vondrak).
-    - **Coordinate Transformation**: Ecliptic -> Equatorial.
+    - Earth heliocentric ecliptic coordinates from VSOP87D (L, B, R).
+    - Vector inversion to obtain Sun geocentric ecliptic coordinates.
+    - Nutation in longitude and obliquity (simplified IAU 2000B style).
+    - Annual aberration correction on ecliptic longitude.
+    - Obliquity of the ecliptic (Laskar formula for mean obliquity).
+    - Ecliptic to equatorial transformation.
 
 Precision:
     - Target: < 1 arcsecond (0.00028 deg) relative to JPL Horizons.
@@ -27,150 +27,113 @@ Usage:
 import math
 from .time_struct import Time
 from .coordinates import EclipticCoordinates, EquatorialCoordinates, DEG2RAD, RAD2DEG
+from .vsop87_earth import earth_heliocentric_ecliptic
+
 
 class SunModel:
     """
-    Static class acting as the physics engine for Solar calculations.
+    Physics engine for apparent solar position based on heliocentric Earth motion.
     """
 
-    # ==========================================================================
-    # Constants (Meeus / VSOP87)
-    # ==========================================================================
-    
-    # Aberration constant (arcseconds converted to degrees)
+    # Aberration constant (arcseconds converted to degrees).
+    # Represents the mean annual aberration at 1 AU.
     KAPPA_DEG = 20.49552 / 3600.0
 
     @staticmethod
     def compute_geocentric_position(time: Time) -> EquatorialCoordinates:
         """
-        Calculates the Apparent Geocentric Equatorial Coordinates of the Sun.
-        
+        Calculates the apparent geocentric equatorial coordinates of the Sun.
+
         Steps:
-        1. Calculate Mean Orbital Elements (L0, M, e) at Time T.
-        2. Solve Kepler's Equation for Eccentric Anomaly (E).
-        3. Calculate True Geometric Longitude (Theta).
-        4. Apply Nutation and Aberration to get Apparent Longitude (lambda_app).
-        5. Calculate True Obliquity of the Ecliptic (epsilon).
-        6. Transform to Equatorial (Alpha, Delta).
+            1. Compute Earth's heliocentric ecliptic coordinates (L, B, R) in TT.
+            2. Convert to rectangular coordinates and invert to Sun geocentric.
+            3. Convert Sun vector back to ecliptic spherical (geometric).
+            4. Compute nutation in longitude and obliquity for the given epoch.
+            5. Apply nutation and annual aberration to obtain apparent longitude.
+            6. Compute true obliquity and transform ecliptic to equatorial.
 
         Args:
-            time (Time): The instant of observation.
+            time (Time): Instant of observation in civil time with TT support.
 
         Returns:
-            EquatorialCoordinates: The apparent position (RA/Dec) of the Sun center.
+            EquatorialCoordinates: Apparent RA/Dec of the solar center.
         """
-        # 1. Get Julian Centuries (Terrestrial Time)
-        # CRITICAL: Orbital mechanics use TT, not UTC.
+        # 1. Heliocentric Earth position from VSOP87D (ecliptic, TT-based).
+        L_E_deg, B_E_deg, R_E_au = earth_heliocentric_ecliptic(time)
+        L_E_rad = L_E_deg * DEG2RAD
+        B_E_rad = B_E_deg * DEG2RAD
+
+        # 2. Earth heliocentric rectangular coordinates (ecliptic frame).
+        X_E = R_E_au * math.cos(B_E_rad) * math.cos(L_E_rad)
+        Y_E = R_E_au * math.cos(B_E_rad) * math.sin(L_E_rad)
+        Z_E = R_E_au * math.sin(B_E_rad)
+
+        # 3. Sun geocentric rectangular coordinates (ecliptic frame).
+        X_S = -X_E
+        Y_S = -Y_E
+        Z_S = -Z_E
+
+        R_S_au = math.sqrt(X_S * X_S + Y_S * Y_S + Z_S * Z_S)
+
+        # Geometric ecliptic longitude and latitude of the Sun.
+        lambda_geom_rad = math.atan2(Y_S, X_S)
+        beta_geom_rad = math.atan2(Z_S, math.hypot(X_S, Y_S))
+
+        if lambda_geom_rad < 0.0:
+            lambda_geom_rad += 2.0 * math.pi
+
+        lambda_geom_deg = lambda_geom_rad * RAD2DEG
+        beta_geom_deg = beta_geom_rad * RAD2DEG
+
+        # 4. Nutation in longitude and obliquity from simplified IAU 2000B-style model.
+        # Time in Julian centuries of TT from J2000.0.
         T = time.julian_centuries_tt
 
-        # 2. Mean Orbital Elements
-        # Geometric Mean Longitude (L0)
-        L0 = (280.46646 + 36000.76983 * T + 0.0003032 * T*T) % 360.0
-        
-        # Mean Anomaly (M)
-        M = (357.52911 + 35999.05029 * T - 0.0001537 * T*T) % 360.0
-        M_rad = M * DEG2RAD
-        
-        # Eccentricity (e)
-        e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T*T
+        # Longitude of ascending node of the Moon's orbit (degrees).
+        omega_deg = 125.04452 - 1934.136261 * T + 0.0020708 * T * T
+        omega_rad = omega_deg * DEG2RAD
 
-        # 3. Solve Kepler's Equation for Eccentric Anomaly (E)
-        E_rad = SunModel._solve_kepler(M_rad, e)
+        # Use geometric solar longitude as the argument for nutation terms.
+        L_sun_rad = lambda_geom_deg * DEG2RAD
 
-        # 4. True Geometric Longitude (Theta)
-        # Using the True Anomaly (nu) method for strict vector correctness
-        # tan(nu/2) = sqrt((1+e)/(1-e)) * tan(E/2)
-        sqrt_factor = math.sqrt((1 + e) / (1 - e))
-        tan_nu_2 = sqrt_factor * math.tan(E_rad / 2.0)
-        nu_rad = 2.0 * math.atan(tan_nu_2)
-        
-        # True Longitude = L0 + nu - M (careful with wrap-around)
-        # Alternatively: Theta = TrueAnomaly + LongitudePerihelion
-        # But Meeus C=Equation of Center is simpler for circular checking.
-        # Let's stick to the specific definition:
-        # Theta = L0 + C
-        # Where C = nu - M
-        C_rad = nu_rad - M_rad
-        theta_deg = (L0 + (C_rad * RAD2DEG)) % 360.0
+        # Nutation in longitude Δψ and nutation in obliquity Δε in arcseconds.
+        d_psi_arcsec = -17.20 * math.sin(omega_rad) - 1.32 * math.sin(2.0 * L_sun_rad)
+        d_eps_arcsec = 9.20 * math.cos(omega_rad) + 0.57 * math.cos(2.0 * L_sun_rad)
 
-        # 5. Apparent Longitude (Perturbations)
-        # Nutation in Longitude (d_psi) and Obliquity (d_eps)
-        # We need Omega (Moon's Ascending Node)
-        omega = (125.04452 - 1934.136261 * T + 0.0020708 * T*T) % 360.0
-        omega_rad = omega * DEG2RAD
-        
-        # Mean Longitude Sun (L_sun) approx L0 for nutation terms
-        L_sun_rad = L0 * DEG2RAD
-        
-        # Simplified IAU 2000B Nutation (Meeus Ch 22)
-        # d_psi in arcseconds -> degrees
-        d_psi_arcsec = -17.20 * math.sin(omega_rad) - 1.32 * math.sin(2 * L_sun_rad)
         d_psi_deg = d_psi_arcsec / 3600.0
-        
-        # d_eps in arcseconds -> degrees
-        d_eps_arcsec = 9.20 * math.cos(omega_rad) + 0.57 * math.cos(2 * L_sun_rad)
         d_eps_deg = d_eps_arcsec / 3600.0
 
-        # Aberration of Light
-        # Sun appears slightly behind Earth's motion.
-        # Correction approx -20.4898"
-        aberration_deg = -SunModel.KAPPA_DEG
-        
-        # Final Apparent Longitude
-        lambda_app_deg = theta_deg + d_psi_deg + aberration_deg
+        # 5. Annual aberration and apparent ecliptic longitude.
+        # Nutation is applied to longitude, then annual aberration is subtracted.
+        lambda_nut_deg = lambda_geom_deg + d_psi_deg
+        lambda_app_deg = lambda_nut_deg - SunModel.KAPPA_DEG
 
-        # 6. True Obliquity of the Ecliptic (epsilon)
-        # Mean Obliquity (eps0) - Laskar's Formula
-        # U = T / 100 (Julian Millennia)
+        # Apparent ecliptic latitude is approximated by the geometric latitude.
+        beta_app_deg = beta_geom_deg
+
+        # Normalize apparent longitude to [0, 360).
+        lambda_app_deg = lambda_app_deg % 360.0
+        if lambda_app_deg < 0.0:
+            lambda_app_deg += 360.0
+
+        # 6. True obliquity of the ecliptic (Laskar mean obliquity + Δε).
         U = T / 100.0
-        eps0_sec = (84381.448 - 4680.93 * U - 1.55 * U*U + 
-                    1999.25 * U*U*U - 51.38 * U*U*U*U - 249.67 * U*U*U*U*U)
-        eps0_deg = eps0_sec / 3600.0
-        
+        eps0_arcsec = (
+            84381.448
+            - 4680.93 * U
+            - 1.55 * U * U
+            + 1999.25 * U * U * U
+            - 51.38 * U * U * U * U
+            - 249.67 * U * U * U * U * U
+        )
+        eps0_deg = eps0_arcsec / 3600.0
         true_obliquity_deg = eps0_deg + d_eps_deg
 
-        # 7. Coordinate Transformation
-        # Create Ecliptic structure (Geocentric Distance R approx 1.0 for angles)
-        # Calculating R strictly from ellipse: R = (1-e^2) / (1 + e cos(nu))
-        R_au = (1.0 - e*e) / (1.0 + e * math.cos(nu_rad))
-        
+        # 7. Ecliptic to equatorial transformation using true obliquity.
         ecliptic = EclipticCoordinates(
             longitude=lambda_app_deg,
-            latitude=0.0, # Sun is always on ecliptic (approx)
-            distance=R_au
+            latitude=beta_app_deg,
+            distance=R_S_au,
         )
 
         return ecliptic.to_equatorial(true_obliquity_deg)
-
-    @staticmethod
-    def _solve_kepler(M_rad: float, e: float) -> float:
-        """
-        Solves Kepler's Equation (E = M + e*sin(E)) for Eccentric Anomaly E.
-        Uses Newton-Raphson iteration.
-
-        Args:
-            M_rad (float): Mean Anomaly in radians.
-            e (float): Eccentricity.
-
-        Returns:
-            float: Eccentric Anomaly (E) in radians.
-        """
-        # Initial guess
-        E = M_rad
-        if e > 0.8:
-            E = math.pi
-            
-        # Iterate (usually converges in 2-3 steps for Earth)
-        for _ in range(5):
-            delta = E - e * math.sin(E) - M_rad
-            # Derivative: d/dE (E - e*sin(E) - M) = 1 - e*cos(E)
-            derivative = 1.0 - e * math.cos(E)
-            
-            # Newton step
-            step = delta / derivative
-            E = E - step
-            
-            if abs(step) < 1e-9:
-                break
-                
-        return E

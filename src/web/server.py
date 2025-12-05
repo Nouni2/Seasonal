@@ -20,7 +20,7 @@ Usage:
 import sys
 import os
 import math
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Body
@@ -122,7 +122,7 @@ def parse_time(dt_str: str) -> Time:
         # Convert to UTC naive for Time struct
         # (Assuming input is UTC or converting it)
         if dt.tzinfo:
-            dt = dt.astimezone(datetime.utcnow().tzinfo).replace(tzinfo=None)
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
         
         return Time.from_gregorian(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond/1e6)
     except Exception as e:

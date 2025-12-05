@@ -62,7 +62,7 @@ class CorrectionModel:
             EquatorialCoordinates: The Topocentric (Observer-centric) RA/Dec.
         """
         # 1. Observer's Geocentric Position (Rho * sin/cos phi')
-        # We need to compute the distance from Earth axis and Equatorial plane.
+        # Compute distance from Earth axis and Equatorial plane.
         # See Math Reference 5.2
         
         lat_rad = observer_lat * DEG2RAD
@@ -110,25 +110,25 @@ class CorrectionModel:
         numerator = -rho_cos_phi * sin_pi * sin_h
         denominator = cos_dec - (rho_cos_phi * sin_pi * cos_h)
         
-        # Use atan2 for safety, though typically small
+        # Use atan2 to preserve quadrant information
         delta_alpha_rad = math.atan2(numerator, denominator)
         
         # 5. Compute New Declination (Delta')
         # tan(delta') = ((sin_delta - rho*sin_phi'*sin_pi) * cos(d_alpha)) / (cos_delta - rho*cos_phi'*sin_pi*cos_H)
-        # Note: The denominator here is the same as the RA calculation denominator!
+        # The denominator is identical to the RA calculation denominator.
         
-        # We need cos(delta_alpha)
+        # Calculate cos(delta_alpha) needed for the numerator
         cos_delta_alpha = math.cos(delta_alpha_rad)
         
         num_dec = (sin_dec - rho_sin_phi * sin_pi) * cos_delta_alpha
-        den_dec = denominator # Re-use strictly
+        den_dec = denominator 
         
         delta_prime_rad = math.atan2(num_dec, den_dec)
         
         # 6. Apply Shifts
         new_ra_rad = ra_rad + delta_alpha_rad
         
-        # Normalize RA
+        # Normalize RA to [0, 2pi) range
         if new_ra_rad < 0:
             new_ra_rad += 2 * math.pi
         elif new_ra_rad >= 2 * math.pi:
@@ -137,61 +137,82 @@ class CorrectionModel:
         return EquatorialCoordinates(
             ra_degrees=new_ra_rad * RAD2DEG,
             dec_degrees=delta_prime_rad * RAD2DEG,
-            distance=geocentric.distance # Distance doesn't meaningfully change for this context
+            distance=geocentric.distance 
         )
 
     @staticmethod
-    def apply_refraction(geometric_altitude_deg: float, 
-                         pressure_mbar: float = 1010.0, 
-                         temp_celsius: float = 10.0,
-                         enable_refraction: bool = True) -> float:
+    def apply_refraction(
+        geometric_altitude_deg: float,
+        pressure_mbar: float = 1010.0,
+        temp_celsius: float = 10.0,
+        enable_refraction: bool = True,
+    ) -> float:
         """
         Calculates the apparent altitude by applying atmospheric refraction.
-        
-        Uses Saemundsson's formula (Meeus 16.4) with Bennett's scaling for
-        temperature and pressure.
-        
+
+        Uses Saemundsson's formula (Meeus 16.4) evaluated at the apparent
+        altitude, solved iteratively starting from the geometric altitude.
+        Includes Bennett-style scaling for pressure and temperature.
+
         Args:
-            geometric_altitude_deg (float): The calculated "true" altitude.
-            pressure_mbar (float): Surface pressure in millibars/hPa. Default 1010.
-            temp_celsius (float): Surface temperature in Celsius. Default 10.
-            enable_refraction (bool): If False, returns geometric altitude unmodified.
+            geometric_altitude_deg (float): Topocentric geometric altitude in degrees.
+            pressure_mbar (float): Surface pressure in millibars/hPa.
+            temp_celsius (float): Surface temperature in Celsius.
+            enable_refraction (bool): If False, returns geometric altitude.
 
         Returns:
             float: Apparent altitude in degrees.
         """
-        # 0. Check toggle
         if not enable_refraction:
             return geometric_altitude_deg
 
-        h = geometric_altitude_deg
-        
-        # Refraction is meaningless/undefined for objects well below horizon
-        # Sun is ~0.5 deg wide, so we calculate down to -0.55 deg (just below horizon)
-        if h < -0.557: 
-            return h
+        h_geo = geometric_altitude_deg
 
-        # 1. Standard Refraction (R0) - Saemundsson
-        # R = 1.02 / tan(h + 10.3/(h + 5.11))  (Result in arcminutes)
-        # WARNING: Formula arguments are in DEGREES.
-        
-        div_inner = h + 5.11
-        term_inner = 10.3 / div_inner
-        tan_arg_deg = h + term_inner
-        tan_arg_rad = tan_arg_deg * DEG2RAD
-        
-        # Avoid tan(90) - unlikely for refraction but good practice
-        if abs(math.cos(tan_arg_rad)) < 1e-9:
-            return h
+        # Refraction formulae (Saemundsson) diverge or are undefined below the horizon.
+        # We allow the formula to compute slightly below the horizon (-2.0 deg)
+        # to ensure continuity at the exact moment of sunset (approx -0.83 deg).
+        # A hard cutoff at -0.57 causes a step-function error of ~0.8 deg at sunrise.
+        if h_geo < -2.0:
+            return h_geo
 
-        r_arcmin = 1.02 / math.tan(tan_arg_rad)
-        
-        # 2. Environmental Correction
-        # R = R0 * (P / 1010) * (283 / (273 + T))
+        # Pressure and temperature scaling factor applied to the standard refraction.
         kelvin = 273.0 + temp_celsius
-        correction_factor = (pressure_mbar / 1010.0) * (283.0 / kelvin)
-        
-        r_final_arcmin = r_arcmin * correction_factor
-        r_final_deg = r_final_arcmin / 60.0
-        
-        return h + r_final_deg
+        scaling = (pressure_mbar / 1010.0) * (283.0 / kelvin)
+
+        # Iterative solution for apparent altitude h_app such that:
+        #   h_app = h_geo + R(h_app)
+        # where R(h_app) is Saemundsson refraction in degrees.
+        h_app = h_geo
+        for _ in range(3):
+            # Clamp the argument to -1.0 to ensure numerical stability during iteration
+            # for values near the cutoff threshold.
+            h_used = max(h_app, -1.0)
+
+            # Saemundsson refraction R0 in arcminutes:
+            #   R0 = 1.02 / tan(h + 10.3 / (h + 5.11))
+            # with h in degrees and result in arcminutes.
+            div_inner = h_used + 5.11
+            if div_inner == 0.0:
+                break
+
+            tan_arg_deg = h_used + 10.3 / div_inner
+            tan_arg_rad = tan_arg_deg * DEG2RAD
+
+            # Avoid division by zero if tan argument approaches 90 degrees (zenith)
+            if abs(math.cos(tan_arg_rad)) < 1e-9:
+                break
+
+            r0_arcmin = 1.02 / math.tan(tan_arg_rad)
+            r_arcmin = r0_arcmin * scaling
+            r_deg = r_arcmin / 60.0
+
+            h_new = h_geo + r_deg
+            
+            # Check for convergence
+            if abs(h_new - h_app) < 1e-6:
+                h_app = h_new
+                break
+
+            h_app = h_new
+
+        return h_app

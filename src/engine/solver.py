@@ -271,6 +271,7 @@ class SolarEventSolver:
                 
             # Secant Step
             # x_new = x2 - f(x2) * (x2 - x1) / (f(x2) - f(x1))
+            # Here x is time (fractional days), f(x) is altitude
             
             # Time difference in days
             dt = (t2.jd_day - t1.jd_day) + (t2.jd_fraction - t1.jd_fraction)

@@ -1,0 +1,123 @@
+SEASONAL ENGINE VERIFICATION REPORT (FINAL RUN)
+Generated: 2025-12-03 11:19:44
+============================================================
+
+=== Validating: A_Greenwich_Solstice_APP.csv ===
+Location: Lat 51.4934°, Lon 0.0°, Elev 0.0m
+Samples : 1441
+Mode    : Refraction ENABLED
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.013129° (Limit 0.0003°)
+Max Alt Error    : 0.649826° (Limit 0.002°)
+Max LST Error    : 0.000777° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: A_Greenwich_Solstice_GEOM.csv ===
+Location: Lat 51.4934°, Lon 0.0°, Elev 0.0m
+Samples : 1441
+Mode    : Geometric ONLY
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.013129° (Limit 0.0003°)
+Max Alt Error    : 0.004238° (Limit 0.0003°)
+Max LST Error    : 0.000777° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: B_Svalbard_Winter_APP.csv ===
+Location: Lat 78.2232°, Lon 15.6267°, Elev 0.0m
+Samples : 1441
+Mode    : Refraction ENABLED
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.007103° (Limit 0.0003°)
+Max Alt Error    : 0.647945° (Limit 0.002°)
+Max LST Error    : 0.000512° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: B_Svalbard_Winter_GEOM.csv ===
+Location: Lat 78.2232°, Lon 15.6267°, Elev 0.0m
+Samples : 1441
+Mode    : Geometric ONLY
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.007103° (Limit 0.0003°)
+Max Alt Error    : 0.001333° (Limit 0.0003°)
+Max LST Error    : 0.000512° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: C_Cairo_Historical_APP.csv ===
+Location: Lat 30.0444°, Lon 31.2357°, Elev 0.0m
+Samples : 1441
+Mode    : Refraction ENABLED
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 8.798771° (Limit 0.0003°)
+Max Alt Error    : 2.058190° (Limit 0.002°)
+Max LST Error    : 8.866991° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: C_Cairo_Historical_GEOM.csv ===
+Location: Lat 30.0444°, Lon 31.2357°, Elev 0.0m
+Samples : 1441
+Mode    : Geometric ONLY
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 8.798771° (Limit 0.0003°)
+Max Alt Error    : 1.411578° (Limit 0.0003°)
+Max LST Error    : 8.866991° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: D_Quito_Future_APP.csv ===
+Location: Lat -0.1807°, Lon 281.5322°, Elev 0.0m
+Samples : 1441
+Mode    : Refraction ENABLED
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.137694° (Limit 0.0003°)
+Max Alt Error    : 0.699940° (Limit 0.002°)
+Max LST Error    : 0.003619° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: D_Quito_Future_GEOM.csv ===
+Location: Lat -0.1807°, Lon 281.5322°, Elev 0.0m
+Samples : 1441
+Mode    : Geometric ONLY
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.137694° (Limit 0.0003°)
+Max Alt Error    : 0.053328° (Limit 0.0003°)
+Max LST Error    : 0.003619° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: E_MaunaKea_Topo_APP.csv ===
+Location: Lat 19.8206°, Lon 204.5319°, Elev 4205.0m
+Samples : 1441
+Mode    : Refraction ENABLED
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.023916° (Limit 0.0003°)
+Max Alt Error    : 0.652697° (Limit 0.002°)
+Max LST Error    : 0.000292° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------
+
+=== Validating: E_MaunaKea_Topo_GEOM.csv ===
+Location: Lat 19.8206°, Lon 204.5319°, Elev 4205.0m
+Samples : 1441
+Mode    : Geometric ONLY
+----------------------------------------
+Validated Samples: 1441
+Max Az Error     : 0.023916° (Limit 0.0003°)
+Max Alt Error    : 0.008422° (Limit 0.0003°)
+Max LST Error    : 0.000292° (Limit 5e-05°)
+Result           : >> FAILED <<
+----------------------------------------

@@ -12,6 +12,8 @@ Key Features:
     - **Time Scales**: Distinguishes between UTC (Civil) and TT (Terrestrial/Atomic).
     - **Delta T**: Implements rigorous polynomial approximations for Earth's rotation
       deceleration (Source: Espenak & Meeus, NASA/GSFC).
+    - **Calendar Support**: Auto-switches between Julian and Gregorian calendars
+      at the 1582 boundary (Meeus 7.1).
 
 Usage:
     >>> t = Time.from_gregorian(2025, 6, 21, 12, 0, 0)
@@ -65,9 +67,10 @@ class Time:
     def from_gregorian(cls, year: int, month: int, day: int, 
                        hour: int = 0, minute: int = 0, second: float = 0.0) -> 'Time':
         """
-        Creates a Time object from a Gregorian calendar date (UTC).
+        Creates a Time object from a Calendar date (UTC).
         
         Implements Meeus Algorithm 7.1.
+        Automatically handles the Julian/Gregorian calendar switch (1582-10-15).
         
         Args:
             year (int): Year (e.g., 2025). 1 BC is year 0, 2 BC is -1.
@@ -81,14 +84,68 @@ class Time:
             Time: A new Time instance.
         """
         # 1. Handle Jan/Feb adjustment
+        # If month is 1 or 2, it is treated as month 13 or 14 of the previous year.
         if month <= 2:
             year -= 1
             month += 12
 
-        # 2. Compute A and B (Leap year correction for Gregorian)
-        # Note: Math.floor is essential for negative years handling
+        # 2. Determine Calendar Type (Julian vs Gregorian)
+        # The transition occurred on Oct 15, 1582. Dates before this are Julian.
+        # Note: We check the *original* year/month/day before the Jan/Feb adjustment?
+        # Meeus 7.1 implies the check is done on the date itself.
+        # However, since we modified Y/M, we must use the modified values carefully,
+        # or essentially check the date strictly.
+        # Strict check: 1582.1015
+        
+        # Using floating point comparison for date boundary
+        # Note: We use the modified year/month for calculation, but the calendar
+        # check assumes standard date. Let's rely on the Meeus B calculation logic.
+        
+        # Determine B (Gregorian Calendar Correction)
+        # B = 2 - A + INT(A/4)
+        # For Julian Calendar, B = 0.
+        
+        # Check boundary: 1582-10-15
+        # We need to check against the date provided.
+        # Adjust year/month back for the check if needed, or simply check:
+        # If (Year > 1582) OR (Year == 1582 AND Month > 10) OR (Year == 1582 AND Month == 10 AND Day >= 15)
+        # But since we modified Year/Month above (Jan/Feb become 13/14 of Prev Year),
+        # we can't easily compare Year directly without reversion.
+        
+        # Safer Approach: Check validity using the passed arguments (unmodified)
+        is_gregorian = True
+        orig_year = year + 1 if month > 12 else year # Revert adjustment if applicable? No, simple args.
+        # Actually, simpler:
+        # Convert inputs to a comparable float YYYY.MMDD
+        # Note: Arguments 'year', 'month' inside this function are already modified.
+        # Let's verify based on the modified values.
+        # If M > 12, it was Jan/Feb of (Y+1).
+        
+        # Let's assume standard Gregorian for everything >= 1582-10-15
+        
         A = math.floor(year / 100.0)
-        B = 2 - A + math.floor(A / 4.0)
+        
+        # Calculate B based on Calendar Date
+        # Recover original date logic for the switch
+        check_year = year
+        check_month = month
+        if month > 12:
+            check_year += 1
+            check_month -= 12
+            
+        is_julian = False
+        if check_year < 1582:
+            is_julian = True
+        elif check_year == 1582:
+            if check_month < 10:
+                is_julian = True
+            elif check_month == 10 and day < 15:
+                is_julian = True
+        
+        if is_julian:
+            B = 0
+        else:
+            B = 2 - A + math.floor(A / 4.0)
 
         # 3. Compute Integer Julian Day (at Noon of the given date)
         # 365.25 * (Y + 4716) accounts for the Julian cycle
@@ -103,10 +160,6 @@ class Time:
         day_fraction = (hour / 24.0) + (minute / 1440.0) + (second / 86400.0)
         
         # Adjust because JD starts at noon (12:00)
-        # Example: 12:00 -> fraction 0.5 relative to previous midnight, 
-        # but JD is defined relative to noon.
-        # Standard formula: JD = Int(Noon) + Fraction - 0.5
-        
         final_fraction = day_fraction - 0.5
         
         return cls(int(jd_noon_int), final_fraction)
