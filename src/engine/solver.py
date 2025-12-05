@@ -245,16 +245,17 @@ class SolarEventSolver:
             direction: -1 for Sunrise (Search Backwards), +1 for Sunset (Search Forwards).
         """
         # 1. Initial Bracket Guess
-        # Move 6 hours away from noon
+        # Center the bracket 6 hours from noon and sample +/- 2 hours
         offset_days = (6.0 / 24.0) * direction
-        
-        # Point A: 4 hours from transit
-        t1_frac = t_start.jd_fraction + (4.0/24.0 * direction)
+        center_frac = t_start.jd_fraction + offset_days
+
+        # Point A: 2 hours before the center (4 hours from transit)
+        t1_frac = center_frac - (2.0 / 24.0)
         t1 = Time(t_start.jd_day, t1_frac)
         h1 = self._get_altitude(t1, lat, lon, elev)
-        
-        # Point B: 8 hours from transit
-        t2_frac = t_start.jd_fraction + (8.0/24.0 * direction)
+
+        # Point B: 2 hours after the center (8 hours from transit)
+        t2_frac = center_frac + (2.0 / 24.0)
         t2 = Time(t_start.jd_day, t2_frac)
         h2 = self._get_altitude(t2, lat, lon, elev)
         
