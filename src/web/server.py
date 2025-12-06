@@ -226,9 +226,18 @@ async def get_day_events(req: EphemerisReq):
     Solves for Sunrise, Sunset, and Day Type.
     Used by the '24h Bar' widget.
     """
-    # Parse just the date part
-    dt = datetime.fromisoformat(req.datetime_str)
-    d = date(dt.year, dt.month, dt.day)
+    # Normalize the provided timestamp to UTC before extracting the civil date.
+    try:
+        dt = datetime.fromisoformat(req.datetime_str.replace('Z', '+00:00'))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid timestamp: {e}")
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+
+    d = dt.date()
     
     solver = SolarEventSolver()
     res = solver.solve_for_date(d, req.lat, req.lon, req.elevation)
